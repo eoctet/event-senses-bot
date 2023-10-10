@@ -1,8 +1,5 @@
 # 事件决策引擎
 
-[**🇨🇳中文**](./README.Zh_CN.md) | [**🌐English
-**](./README2.md) | [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-
 ## 项目背景
 
 这是我独立开发的一款企业级产品的第二个版本，正如它的名称一样，作为**事件驱动业务的内核**已在数家企业中落地发芽。
@@ -292,4 +289,4 @@ A：本项目是事件引擎的主要实现，管理端服务并不重要，你�
 
 ----
 
-
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
