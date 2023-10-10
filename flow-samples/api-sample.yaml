@@ -1,0 +1,89 @@
+# 任务参数配置
+app:
+  logger: "DEBUG"               # 日志模式
+  lang: "zh-CN"                 # zh-CN/en
+  source:
+    kafka-bootstrap: "localhost:9093"
+  job:
+    parallelism:
+      default: 2
+      max: 100
+    checkpoint:
+      interval: 5000
+      storage: "/event-senses-bot/log/checkpoint"
+    filter:
+      enabled: true
+      max-cache-expire: 300
+  sink:
+    parallelism: 2
+    backup: "/event-senses-bot/log/backup"
+    cache:
+      max-queue: 5
+      interval-millis: 5000
+  db:
+    redis:
+      cluster-enabled: false
+      cluster-nodes:
+      host: localhost
+      port: 6379
+      username:
+      password:
+      database: 0
+      pool:
+        max-total: 20
+        max-idle: 8
+        min-idle: 0
+        max-wait-millis: 3000
+    clickhouse:
+      jdbc: "jdbc:clickhouse://localhost:8123/event_senses_bot"
+      username:
+      password:
+
+# 事件配置
+event:
+  name: "接口动作事件示例"
+  code: "EVENT-5C0595EFEAA9"
+  catalog: "TEST"
+  desc: "这是一个事件示例"
+
+# 事件渠道配置
+channel:
+  name: "测试事件渠道"
+  code: "CHANNEL-88DD8E18EAC7"
+  topic: "event_sense_topic"
+  format: "JSON"
+  groupId: "event_sense_group1"
+  encryption:
+    type: "TEXT"
+    key: ""
+  params:
+    - { param: "uid", filter: true, nullable: true, datatype: "STRING", desc: "UID" }
+    - { param: "hook_code", datatype: "STRING", desc: "Code." }
+    - { param: "test_text", datatype: "STRING", desc: "Test text." }
+
+# 流水线配置
+actions:
+  - action:
+      name: "调用业务系统A接口"
+      code: "ACTION-C77AC80CDBF3"
+      type: "API"
+      parent: "0"
+      config:
+        api:
+          url: "https://a.system.com/v2/api/hook/${hook_code}"
+          method: "POST"
+          request:
+          headers:
+            - { name: "Content-Type", value: "application/json", desc: "" }
+          body: >
+            {
+                "msg_type": "text",
+                "content": {
+                    "text": "${test_text}"
+                }
+            }
+          timeout: 60000
+          format: "JSON"
+        output:
+          - { param: "code", datatype: "LONG", desc: "响应状态" }
+          - { param: "message", datatype: "STRING", desc: "响应结果" }

@@ -1,0 +1,187 @@
+# 任务参数配置
+app:
+  logger: "DEBUG"               # 日志模式
+  lang: "zh-CN"                 # zh-CN/en
+  source:
+    kafka-bootstrap: "localhost:9093"
+  job:
+    parallelism:
+      default: 1
+      max: 100
+    checkpoint:
+      interval: 5000
+      storage: "/event-senses-bot/log/checkpoint"
+    filter:
+      enabled: true
+      max-cache-expire: 300
+    idle-timeout: 10000
+  sink:
+    parallelism: 1
+    backup: "/event-senses-bot/log/backup"
+    cache:
+      max-queue: 50
+      interval-millis: 15000
+  db:
+    redis:
+      cluster-enabled: false
+      cluster-nodes:
+      host: localhost
+      port: 6379
+      username:
+      password:
+      database: 0
+      pool:
+        max-total: 20
+        max-idle: 8
+        min-idle: 0
+        max-wait-millis: 3000
+    clickhouse:
+      jdbc: "jdbc:clickhouse://localhost:8123/event_senses_bot"
+      username:
+      password:
+
+# 事件配置
+event:
+  name: "完整示例事件"
+  code: "EVENT-66D7727A22C5"
+  catalog: "TEST"
+  desc: "完整示例事件测试事件"
+
+# 事件渠道配置
+channel:
+  name: "完整示例消息渠道"
+  code: "CHANNEL-73D91217E371"
+  topic: "event_sense_topic"
+  format: "JSON"
+  groupId: "event_sense_group1"
+  encryption:
+    type: "TEXT"
+    key: ""
+  params:
+    - { param: "uid", filter: true, nullable: true, datatype: "STRING", desc: "UID" }
+    - { param: "test_value", datatype: "DOUBLE", desc: "测试值" }
+    - { param: "create_time", eventtime: true, datatype: "LONG", desc: "创建时间" }
+
+# 流水线配置
+actions:
+  - action:
+      name: "参数异常判断"
+      code: "ACTION-DEA6E6FBDA9B"
+      desc: ""
+      type: "PATTERN"
+      parent: "0"
+      config:
+        pattern:
+          patterns:
+            - { name: "temp_event1", where: "${test_value > 80 && test_value < 160}"  }
+            - { name: "temp_event2", where: "${test_value > 160 && test_value < 200}", times: 2 }
+            - { name: "temp_event3", where: "${test_value > 200 && test_value < 300}" }
+          matchSkipStrategy: "SKIP_TO_LAST"
+          matchSkipPattern: "temp_event3"
+          within: "8 SECONDS" # [Number] MILLISECONDS/SECONDS/MINUTES/HOURS/DAYS
+
+  - action:
+      name: "打印数据到控制台"
+      code: "ACTION-E2CC7EFDAE13"
+      desc: ""
+      type: "SCRIPT"
+      parent: "ACTION-DEA6E6FBDA9B"
+      config:
+        script:
+          lang: "python"
+          format: "DEFAULT"
+          code: >
+            println('Get new event success');
+            println('Event1 value: ' + Pattern.temp_event1.test_value);
+            println('Event2 value: ' + Pattern.temp_event2.test_value);
+            println('Event3 value: ' + Pattern.temp_event3.test_value);
+            num = Pattern.temp_event1[0].test_value * 0.8;
+            println('Calc value: ' + num);
+            return num;
+        output:
+          - { param: "calc_num", datatype: "DOUBLE", desc: "计算值" }
+
+  - action:
+      name: "判断异常值规则"
+      code: "ACTION-E396815D39EA"
+      desc: ""
+      type: "CONDITION"
+      parent: "ACTION-E2CC7EFDAE13"
+      config:
+        condition:
+          expression: "${calc_num > 100}"
+          truly: "ACTION-D7DA102AEDD6"
+          falsely: "ACTION-EBA25D05D7B3"
+
+  - action:
+      name: "调用业务系统A接口"
+      code: "ACTION-D7DA102AEDD6"
+      type: "API"
+      parent: "ACTION-E396815D39EA"
+      config:
+        api:
+          url: "https://a.system.com/v2/api"
+          method: "POST"
+          request:
+          headers:
+            - { name: "Content-Type", value: "application/json", desc: "" }
+          body: >
+            {
+                "msg_type": "text",
+                "content": {
+                    "text": "条件成立 ${Pattern.temp_event1[0].uid}"
+                }
+            }
+          timeout: 60000
+          format: "JSON"
+        output:
+          - { param: "code", datatype: "LONG", desc: "响应状态" }
+          - { param: "message", datatype: "STRING", desc: "响应结果" }
+
+  - action:
+      name: "调用业务系统B接口"
+      code: "ACTION-EBA25D05D7B3"
+      type: "API"
+      parent: "ACTION-E396815D39EA"
+      config:
+        api:
+          url: "https://b.system.com/v2/api"
+          method: "POST"
+          request:
+          headers:
+            - { name: "Content-Type", value: "application/json", desc: "" }
+          body: >
+            {
+                "msg_type": "text",
+                "content": {
+                    "text": "条件不成立 ${Pattern.temp_event1[0].uid}"
+                }
+            }
+          timeout: 60000
+          format: "JSON"
+        output:
+          - { param: "code", datatype: "LONG", desc: "响应状态" }
+          - { param: "message", datatype: "STRING", desc: "响应结果" }
+
+  - action:
+      name: "邮件通知到管理员"
+      code: "ACTION-C1746B60035F"
+      desc: ""
+      type: "EMAIL"
+      parent: "ACTION-D7DA102AEDD6"
+      config:
+        email:
+          server: "smtp.yourserver.cn"
+          smtp: 465
+          ssl: true
+          tls: true
+          username: "user@test.com"
+          password: "YOUR_PASSWORD"
+          subject: "通知发送成功"
+          from: "user@test.com"
+          to: "william@test.com"
+          cc: "other@test.com"
+          content: >
+            <b>接口响应：</b><br/>
+            <p>状态码：<span style="color:red">${code}</span></p>
+            <p>状态消息：<span style="color:red">${message}</span></p> 

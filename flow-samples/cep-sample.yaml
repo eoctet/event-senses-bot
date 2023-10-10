@@ -1,0 +1,96 @@
+# 任务参数配置
+app:
+  logger: "DEBUG"               # 日志模式
+  lang: "zh-CN"                 # zh-CN/en
+  source:
+    kafka-bootstrap: "localhost:9093"
+  job:
+    parallelism:
+      default: 1
+      max: 100
+    checkpoint:
+      interval: 5000
+      storage: "/event-senses-bot/log/checkpoint"
+    filter:
+      enabled: true
+      max-cache-expire: 300
+  sink:
+    parallelism: 1
+    backup: "/event-senses-bot/log/backup"
+    cache:
+      max-queue: 50
+      interval-millis: 15000
+  db:
+    redis:
+      cluster-enabled: false
+      cluster-nodes:
+      host: localhost
+      port: 6379
+      username:
+      password:
+      database: 0
+      pool:
+        max-total: 20
+        max-idle: 8
+        min-idle: 0
+        max-wait-millis: 3000
+    clickhouse:
+      jdbc: "jdbc:clickhouse://localhost:8123/event_senses_bot"
+      username:
+      password:
+
+# 事件配置
+event:
+  name: "复杂事件处理"
+  code: "EVENT-5C0595EFEAA9"
+  catalog: "TEST"
+  desc: "这是一个事件示例"
+
+# 事件渠道配置
+channel:
+  name: "测试事件渠道"
+  code: "CHANNEL-88DD8E18EAC7"
+  topic: "event_sense_topic"
+  format: "JSON"
+  groupId: "event_sense_group1"
+  encryption:
+    type: "TEXT"
+    key: ""
+  params:
+    - { param: "uid", filter: true, nullable: true, datatype: "STRING", desc: "UID" }
+    - { param: "test_value", datatype: "DOUBLE", desc: "测试值" }
+    - { param: "test_text", datatype: "STRING", desc: "测试文本" }
+
+# 流水线配置
+actions:
+  - action:
+      name: "复杂事件过滤"
+      code: "ACTION-4DA81C62898B"
+      desc: "CEP sample for test."
+      type: "PATTERN"
+      parent: "0"
+      config:
+        pattern:
+          patterns:
+            - { name: "event1", where: "${test_value > 100 && test_value < 150}" }
+            - { name: "event2", where: "${test_value > 200 && test_value < 300}", times: 2, mode: "FOLLOWED_BY" }
+            - { name: "event3", where: "${test_value > 500 && test_value < 800}", times: 3, mode: "FOLLOWED_BY" }
+          matchSkipStrategy: "SKIP_TO_LAST"
+          matchSkipPattern: "event3"
+          within: "10 SECONDS" # [Number] MILLISECONDS/SECONDS/MINUTES/HOURS/DAYS
+
+  - action:
+      name: "复杂事件处理动作"
+      code: "ACTION-CA6DB3F0Y789"
+      desc: ""
+      type: "SCRIPT"
+      parent: "ACTION-4DA81C62898B"
+      config:
+        script:
+          lang: "python"
+          format: "DEFAULT"
+          code: >
+            println('Get new event success');
+            println('Event1 value: ' + Pattern.event1.test_value);
+            println('Event2 value: ' + Pattern.event2.test_value);
+            println('Event3 value: ' + Pattern.event3.test_value);
